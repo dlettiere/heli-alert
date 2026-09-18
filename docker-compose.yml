@@ -1,0 +1,9 @@
+services:
+  heli-alert:
+    image: ghcr.io/dlettiere/heli-alert:latest
+    container_name: heli-alert
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=America/New_York
