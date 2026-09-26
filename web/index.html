@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>heli-alert – Settings & Radar Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --card-hover: #1e2842;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --primary-glow: rgba(56, 189, 248, 0.2);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --input-bg: #0b1120;
+      --input-border: #334155;
+      --radius: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px 16px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      font-size: 2.2rem;
+      background: #1e293b;
+      width: 52px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+    }
+
+    .title-group h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .status-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .dot.green { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .dot.yellow { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+    .dot.red { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      color: var(--text);
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--primary);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      font-size: 0.9rem;
+      display: none;
+      z-index: 9999;
+      animation: slideIn 0.2s ease-out;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Nav Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 4px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .stat-card .label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .stat-card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title-icon {
+      font-size: 1.25rem;
+    }
+
+    /* Form Fields */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .help-text {
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="password"],
+    select {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: border-color 0.15s ease;
+      width: 100%;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
+    .input-action-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-action-group input {
+      flex: 1;
+    }
+
+    /* Checkbox Group */
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 6px;
+    }
+
+    .checkbox-card {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+
+    .checkbox-card:hover {
+      border-color: var(--primary);
+    }
+
+    .checkbox-card input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .checkbox-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .checkbox-label {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .checkbox-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: #334155;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #0b0f19;
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: #7dd3fc;
+      border-color: #7dd3fc;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-outline:hover {
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+      padding-top: 20px;
+      border-top: 1px solid var(--card-border);
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+
+    th {
+      background: #0d1424;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-helo { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+    .badge-mil { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .badge-plane { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+
+    .aircraft-link {
+      color: var(--primary);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 500;
+    }
+
+    .aircraft-link:hover {
+      text-decoration: underline;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Radio cards for click-through */
+    .tracker-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .tracker-card {
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .tracker-card:hover {
+      border-color: var(--primary);
+    }
+
+    .tracker-card input[type="radio"] {
+      margin-top: 3px;
+      accent-color: var(--primary);
+    }
+
+    .tracker-card-text strong {
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .tracker-card-text p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast">Settings saved</div>
+
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">🚁</div>
+      <div class="title-group">
+        <h1>heli-alert</h1>
+        <p>ADS-B Proximity Radar & Gotify Push Notifier</p>
+      </div>
+    </div>
+    <div class="status-pills">
+      <div class="pill">
+        <span class="dot" id="poller-dot"></span>
+        <span id="poller-text">Poller: Initializing</span>
+      </div>
+      <div class="pill">
+        <span class="dot" id="adsb-dot"></span>
+        <span id="adsb-text">ADS-B: Checking</span>
+      </div>
+      <div class="pill">
+        <span class="dot" id="gotify-dot"></span>
+        <span id="gotify-text">Gotify: Checking</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('settings')">⚙️ Settings</button>
+    <button class="tab-btn" onclick="switchTab('live')">📡 Live in Radius (<span id="in-radius-count">0</span>)</button>
+    <button class="tab-btn" onclick="switchTab('history')">📜 Alert History</button>
+  </div>
+
+  <!-- TAB: Settings -->
+  <div id="tab-settings" class="tab-content active">
+    <!-- Quick Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="label">Total Alerts Sent</div>
+        <div class="value" id="stat-alerts">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Aircraft in Radius</div>
+        <div class="value" id="stat-in-radius">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Receiver Aircraft</div>
+        <div class="value" id="stat-receiver-aircraft">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Alert Radius</div>
+        <div class="value" id="stat-radius">5.0 mi</div>
+      </div>
+    </div>
+
+    <form id="settings-form" onsubmit="saveSettings(event)">
+      <!-- Receiver & Coordinates -->
+      <div class="card">
+        <div class="card-title">
+          <span class="card-title-icon">📍</span> Receiver & Proximity Location
+        </div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="adsb_url">ADS-B aircraft.json Feed URL</label>
+            <div class="input-action-group">
+              <input type="text" id="adsb_url" name="adsb_url" placeholder="http://tar1090/data/aircraft.json" required>
+              <button type="button" class="btn btn-outline" onclick="testAdsb()">Test Feed</button>
+            </div>
+            <span class="help-text">Local tar1090, readsb, or ultrafeeder aircraft.json endpoint.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="base_lat">Base Station Latitude</label>
+            <input type="number" step="0.0001" id="base_lat" name="base_lat" placeholder="42.2797" required>
+            <span class="help-text">Your target receiver/home latitude.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="base_lon">Base Station Longitude</label>
+            <div class="input-action-group">
+              <input type="number" step="0.0001" id="base_lon" name="base_lon" placeholder="-71.8208" required>
+              <button type="button" class="btn" title="Detect location from browser GPS" onclick="detectLocation()">Use GPS</button>
+            </div>
+            <span class="help-text">Your target receiver/home longitude.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="max_distance_mi">Alert Radius (miles)</label>
+            <input type="number" step="0.5" min="0.1" max="100" id="max_distance_mi" name="max_distance_mi" placeholder="5.0" required>
+            <span class="help-text">Trigger alerts when aircraft enter this circle.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aircraft Filters -->
+      <div class="card">
+        <div class="card-title">
+          <span class="card-title-icon">🎯</span> Aircraft Alert Filters
+        </div>
+        <p class="help-text" style="margin-bottom: 12px;">Select which aircraft categories should trigger push notifications:</p>
+        <div class="checkbox-grid">
+          <label class="checkbox-card">
+            <input type="checkbox" name="alert_type" value="helicopter">
+            <div class="checkbox-info">
+              <span class="checkbox-label">🚁 Helicopters</span>
+              <span class="checkbox-sub">Civilian rotorcraft (Bell, Sikorsky, Robinson, etc.)</span>
+            </div>
+          </label>
+
+          <label class="checkbox-card">
+            <input type="checkbox" name="alert_type" value="military_helo">
+            <div class="checkbox-info">
+              <span class="checkbox-label">🪖🚁 Military Helos</span>
+              <span class="checkbox-sub">Black Hawk, Chinook, Apache, Lakota</span>
+            </div>
+          </label>
+
+          <label class="checkbox-card">
+            <input type="checkbox" name="alert_type" value="military_plane">
+            <div class="checkbox-info">
+              <span class="checkbox-label">🪖✈️ Military Planes</span>
+              <span class="checkbox-sub">Fighters, tankers, transports, trainers</span>
+            </div>
+          </label>
+
+          <label class="checkbox-card">
+            <input type="checkbox" name="alert_type" value="plane">
+            <div class="checkbox-info">
+              <span class="checkbox-label">✈️ Civilian Planes</span>
+              <span class="checkbox-sub">Commercial & general aviation fixed-wing</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Notification Click-Through -->
+      <div class="card">
+        <div class="card-title">
+          <span class="card-title-icon">🔗</span> Notification Click-Through Radar Map
+        </div>
+        <p class="help-text" style="margin-bottom: 12px;">
+          When you tap a Gotify notification on your phone or computer, it immediately opens this live tracking map:
+        </p>
+
+        <div class="tracker-options">
+          <label class="tracker-card">
+            <input type="radio" name="tracker_choice" value="flightradar24" onchange="updateTrackerSelection()">
+            <div class="tracker-card-text">
+              <strong>Flightradar24 (flightradar24.com) — Recommended</strong>
+              <p>Opens Flightradar24 live map directly centered on the aircraft coordinates, plus provides direct link to aircraft registration history.</p>
+            </div>
+          </label>
+
+          <label class="tracker-card">
+            <input type="radio" name="tracker_choice" value="tar1090" onchange="updateTrackerSelection()">
+            <div class="tracker-card-text">
+              <strong>tar1090 / SkyAware (sky.lettiere.org or local)</strong>
+              <p>Opens your local tar1090 or web radar focused on the aircraft hex code (<code>?icao=&lt;hex&gt;</code>).</p>
+            </div>
+          </label>
+
+          <label class="tracker-card">
+            <input type="radio" name="tracker_choice" value="adsbx" onchange="updateTrackerSelection()">
+            <div class="tracker-card-text">
+              <strong>ADSBexchange (globe.adsbexchange.com)</strong>
+              <p>Opens ADS-B Exchange Globe focused on the aircraft transponder code.</p>
+            </div>
+          </label>
+
+          <label class="tracker-card">
+            <input type="radio" name="tracker_choice" value="custom" onchange="updateTrackerSelection()">
+            <div class="tracker-card-text">
+              <strong>Custom Radar URL</strong>
+              <p>Enter any custom radar URL or leave blank to disable click action.</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="tracker_url">Tracker URL / Base Address</label>
+          <input type="text" id="tracker_url" name="tracker_url" placeholder="https://www.flightradar24.com">
+        </div>
+      </div>
+
+      <!-- Gotify Settings -->
+      <div class="card">
+        <div class="card-title">
+          <span class="card-title-icon">🔔</span> Gotify Push Server
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="gotify_url">Gotify Server URL</label>
+            <input type="text" id="gotify_url" name="gotify_url" placeholder="http://192.168.1.20:8088" required>
+            <span class="help-text">Base URL of your Gotify server.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="gotify_token">Gotify App Token</label>
+            <div class="input-action-group">
+              <input type="password" id="gotify_token" name="gotify_token" placeholder="gtfya..." required>
+              <button type="button" class="btn" onclick="toggleTokenVisibility()">👁️</button>
+            </div>
+            <span class="help-text">Token from Gotify application for heli-alert.</span>
+          </div>
+        </div>
+
+        <div class="form-actions" style="margin-top: 16px; border-top: none; padding-top: 0;">
+          <button type="button" class="btn btn-outline" onclick="testGotify()">🔔 Send Test Notification</button>
+        </div>
+      </div>
+
+      <!-- Polling & Cooldown -->
+      <div class="card">
+        <div class="card-title">
+          <span class="card-title-icon">⏱️</span> Polling & Cooldown Timing
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="poll_interval">Polling Interval (seconds)</label>
+            <input type="number" min="2" max="300" id="poll_interval" name="poll_interval" placeholder="10" required>
+            <span class="help-text">How often to query aircraft.json (default: 10s).</span>
+          </div>
+
+          <div class="form-group">
+            <label for="alert_cooldown">Alert Cooldown (seconds)</label>
+            <input type="number" min="10" max="86400" id="alert_cooldown" name="alert_cooldown" placeholder="300" required>
+            <span class="help-text">Wait time before re-alerting the same aircraft (default: 300s = 5m).</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Actions -->
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" style="padding: 12px 24px; font-size: 1rem;">💾 Save Settings</button>
+        <button type="button" class="btn" onclick="loadSettings()">↺ Discard Changes</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- TAB: Live Aircraft in Radius -->
+  <div id="tab-live" class="tab-content">
+    <div class="card">
+      <div class="card-title">
+        <span class="card-title-icon">📡</span> Aircraft Currently in Proximity Radius
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Callsign / Reg</th>
+              <th>Model</th>
+              <th>Distance</th>
+              <th>Altitude</th>
+              <th>Speed</th>
+              <th>Squawk</th>
+              <th>Tracker Link</th>
+            </tr>
+          </thead>
+          <tbody id="live-table-body">
+            <tr>
+              <td colspan="8" class="empty-state">Loading aircraft...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Alert History -->
+  <div id="tab-history" class="tab-content">
+    <div class="card">
+      <div class="card-title">
+        <span class="card-title-icon">📜</span> Recent Alerts Sent
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Aircraft / Callsign</th>
+              <th>Distance</th>
+              <th>Route</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <tr>
+              <td colspan="6" class="empty-state">No alerts sent yet in this session.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentSettings = {};
+
+  function showToast(msg, isError = false) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.borderColor = isError ? "var(--danger)" : "var(--primary)";
+    t.style.display = "block";
+    setTimeout(() => { t.style.display = "none"; }, 3500);
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+    if (name === "settings") {
+      document.querySelector(".tabs button:nth-child(1)").classList.add("active");
+      document.getElementById("tab-settings").classList.add("active");
+    } else if (name === "live") {
+      document.querySelector(".tabs button:nth-child(2)").classList.add("active");
+      document.getElementById("tab-live").classList.add("active");
+    } else if (name === "history") {
+      document.querySelector(".tabs button:nth-child(3)").classList.add("active");
+      document.getElementById("tab-history").classList.add("active");
+    }
+  }
+
+  function toggleTokenVisibility() {
+    const input = document.getElementById("gotify_token");
+    input.type = input.type === "password" ? "text" : "password";
+  }
+
+  function updateTrackerSelection() {
+    const selected = document.querySelector('input[name="tracker_choice"]:checked')?.value;
+    const trackerInput = document.getElementById("tracker_url");
+    if (selected === "flightradar24") {
+      trackerInput.value = "https://www.flightradar24.com";
+    } else if (selected === "tar1090") {
+      if (!trackerInput.value.includes("tar1090") && !trackerInput.value.includes("sky.")) {
+        trackerInput.value = "https://sky.lettiere.org";
+      }
+    } else if (selected === "adsbx") {
+      trackerInput.value = "https://globe.adsbexchange.com";
+    }
+  }
+
+  function setTrackerRadioFromUrl(url) {
+    const clean = (url || "").toLowerCase();
+    let val = "custom";
+    if (clean.includes("flightradar24.com") || clean === "") {
+      val = "flightradar24";
+    } else if (clean.includes("adsbexchange.com")) {
+      val = "adsbx";
+    } else if (clean.includes("sky.") || clean.includes("tar1090") || clean.includes("readsb")) {
+      val = "tar1090";
+    }
+    const radio = document.querySelector(`input[name="tracker_choice"][value="${val}"]`);
+    if (radio) radio.checked = true;
+  }
+
+  async function loadSettings() {
+    try {
+      const res = await fetch("/api/settings");
+      if (!res.ok) throw new Error("Failed to load settings");
+      const data = await res.json();
+      currentSettings = data;
+
+      document.getElementById("adsb_url").value = data.adsb_url || "";
+      document.getElementById("base_lat").value = data.base_lat ?? 0;
+      document.getElementById("base_lon").value = data.base_lon ?? 0;
+      document.getElementById("max_distance_mi").value = data.max_distance_mi ?? 5.0;
+      document.getElementById("gotify_url").value = data.gotify_url || "";
+      document.getElementById("gotify_token").value = data.gotify_token || "";
+      document.getElementById("poll_interval").value = data.poll_interval ?? 10;
+      document.getElementById("alert_cooldown").value = data.alert_cooldown ?? 300;
+      document.getElementById("tracker_url").value = data.tracker_url || "https://www.flightradar24.com";
+
+      setTrackerRadioFromUrl(data.tracker_url);
+
+      const alertTypes = new Set(data.alert_types || []);
+      document.querySelectorAll('input[name="alert_type"]').forEach(cb => {
+        cb.checked = alertTypes.has(cb.value);
+      });
+
+      document.getElementById("stat-radius").textContent = (data.max_distance_mi || 5.0) + " mi";
+    } catch (err) {
+      showToast("Error loading settings: " + err.message, true);
+    }
+  }
+
+  async function saveSettings(e) {
+    e.preventDefault();
+    const alertTypes = [];
+    document.querySelectorAll('input[name="alert_type"]:checked').forEach(cb => {
+      alertTypes.push(cb.value);
+    });
+
+    const payload = {
+      adsb_url: document.getElementById("adsb_url").value.trim(),
+      base_lat: parseFloat(document.getElementById("base_lat").value),
+      base_lon: parseFloat(document.getElementById("base_lon").value),
+      max_distance_mi: parseFloat(document.getElementById("max_distance_mi").value),
+      gotify_url: document.getElementById("gotify_url").value.trim(),
+      gotify_token: document.getElementById("gotify_token").value.trim(),
+      poll_interval: parseInt(document.getElementById("poll_interval").value, 10),
+      alert_cooldown: parseInt(document.getElementById("alert_cooldown").value, 10),
+      tracker_url: document.getElementById("tracker_url").value.trim(),
+      alert_types: alertTypes
+    };
+
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✓ Settings successfully saved and applied!");
+        loadSettings();
+        fetchStatus();
+      } else {
+        showToast("Save failed: " + (data.error || "Unknown error"), true);
+      }
+    } catch (err) {
+      showToast("Network error: " + err.message, true);
+    }
+  }
+
+  async function testAdsb() {
+    const url = document.getElementById("adsb_url").value.trim();
+    try {
+      showToast("Testing ADS-B feed...");
+      const res = await fetch("/api/test-adsb", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adsb_url: url })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`✓ ADS-B feed reachable! (${data.aircraft_count} aircraft tracked)`);
+      } else {
+        showToast("ADS-B feed error: " + (data.error || "Unreachable"), true);
+      }
+    } catch (err) {
+      showToast("ADS-B test error: " + err.message, true);
+    }
+  }
+
+  async function testGotify() {
+    const url = document.getElementById("gotify_url").value.trim();
+    const token = document.getElementById("gotify_token").value.trim();
+    const tracker = document.getElementById("tracker_url").value.trim();
+    const lat = parseFloat(document.getElementById("base_lat").value) || 0;
+    const lon = parseFloat(document.getElementById("base_lon").value) || 0;
+
+    try {
+      showToast("Sending test notification to Gotify...");
+      const res = await fetch("/api/test-gotify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gotify_url: url,
+          gotify_token: token,
+          tracker_url: tracker,
+          base_lat: lat,
+          base_lon: lon
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✓ Test notification sent! Check your Gotify app.");
+      } else {
+        showToast("Gotify error: " + (data.error || "Failed to send"), true);
+      }
+    } catch (err) {
+      showToast("Gotify test error: " + err.message, true);
+    }
+  }
+
+  function detectLocation() {
+    if (!navigator.geolocation) {
+      showToast("Geolocation is not supported by your browser", true);
+      return;
+    }
+    showToast("Detecting GPS location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        document.getElementById("base_lat").value = pos.coords.latitude.toFixed(4);
+        document.getElementById("base_lon").value = pos.coords.longitude.toFixed(4);
+        showToast("✓ Location coordinates updated!");
+      },
+      (err) => {
+        showToast("Location detection failed: " + err.message, true);
+      }
+    );
+  }
+
+  async function fetchStatus() {
+    try {
+      const res = await fetch("/api/status");
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // Update pills
+      const pollerDot = document.getElementById("poller-dot");
+      const pollerText = document.getElementById("poller-text");
+      if (data.poller_running) {
+        pollerDot.className = "dot green";
+        pollerText.textContent = `Poller: Active (${data.poll_interval}s)`;
+      } else {
+        pollerDot.className = "dot yellow";
+        pollerText.textContent = "Poller: Inactive";
+      }
+
+      const adsbDot = document.getElementById("adsb-dot");
+      const adsbText = document.getElementById("adsb-text");
+      if (data.adsb_connected) {
+        adsbDot.className = "dot green";
+        adsbText.textContent = `ADS-B: Connected (${data.receiver_aircraft_count} ac)`;
+      } else {
+        adsbDot.className = "dot red";
+        adsbText.textContent = "ADS-B: Unreachable";
+      }
+
+      const gotifyDot = document.getElementById("gotify-dot");
+      const gotifyText = document.getElementById("gotify-text");
+      if (data.gotify_reachable) {
+        gotifyDot.className = "dot green";
+        gotifyText.textContent = "Gotify: Ready";
+      } else if (!data.gotify_configured) {
+        gotifyDot.className = "dot yellow";
+        gotifyText.textContent = "Gotify: No Token";
+      } else {
+        gotifyDot.className = "dot red";
+        gotifyText.textContent = "Gotify: Error";
+      }
+
+      // Update stats
+      document.getElementById("stat-alerts").textContent = data.total_alerts_sent ?? 0;
+      document.getElementById("stat-in-radius").textContent = data.in_radius_count ?? 0;
+      document.getElementById("in-radius-count").textContent = data.in_radius_count ?? 0;
+      document.getElementById("stat-receiver-aircraft").textContent = data.receiver_aircraft_count ?? 0;
+
+      // Update live table
+      renderLiveTable(data.aircraft_in_radius || []);
+
+      // Update history table
+      renderHistoryTable(data.recent_alerts || []);
+
+    } catch (err) {
+      console.warn("Status fetch failed", err);
+    }
+  }
+
+  function getBadgeClass(type) {
+    if (type.includes("mil")) return "badge badge-mil";
+    if (type.includes("helo") || type.includes("helicopter")) return "badge badge-helo";
+    return "badge badge-plane";
+  }
+
+  function renderLiveTable(aircraft) {
+    const tbody = document.getElementById("live-table-body");
+    if (!aircraft || aircraft.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No aircraft currently within alert radius.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = aircraft.map(ac => {
+      const typeLabel = (ac.type || "unknown").replace("_", " ").toUpperCase();
+      const badgeCls = getBadgeClass(ac.type || "");
+      const link = ac.click_url || `https://www.flightradar24.com/${ac.lat},${ac.lon}/13`;
+      return `
+        <tr>
+          <td><span class="${badgeCls}">${typeLabel}</span></td>
+          <td><strong>${ac.flight || ac.registration || ac.hex}</strong></td>
+          <td>${ac.model || ac.desc || "–"}</td>
+          <td><strong>${ac.distance.toFixed(1)} mi</strong></td>
+          <td>${ac.altitude != null ? ac.altitude.toLocaleString() + " ft" : "–"}</td>
+          <td>${ac.speed != null ? Math.round(ac.speed) + " kt" : "–"}</td>
+          <td><code>${ac.squawk || "–"}</code></td>
+          <td><a href="${link}" target="_blank" class="aircraft-link">Track ↗</a></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderHistoryTable(alerts) {
+    const tbody = document.getElementById("history-table-body");
+    if (!alerts || alerts.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No alerts sent yet in this session.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = alerts.map(al => {
+      const timeStr = new Date(al.timestamp * 1000).toLocaleTimeString();
+      const badgeCls = getBadgeClass(al.type || "");
+      return `
+        <tr>
+          <td>${timeStr}</td>
+          <td><span class="${badgeCls}">${(al.type || "").replace("_", " ")}</span></td>
+          <td><strong>${al.aircraft_label || al.hex}</strong></td>
+          <td>${al.distance.toFixed(1)} mi</td>
+          <td>${al.route || "VFR"}</td>
+          <td><a href="${al.click_url}" target="_blank" class="aircraft-link">View ↗</a></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  // Initial load
+  loadSettings();
+  fetchStatus();
+  setInterval(fetchStatus, 5000);
+</script>
+</body>
+</html>

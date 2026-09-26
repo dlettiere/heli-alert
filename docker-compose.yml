@@ -3,6 +3,10 @@ services:
     image: ghcr.io/dlettiere/heli-alert:latest
     container_name: heli-alert
     restart: unless-stopped
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./data:/app/data
     env_file:
       - .env
     environment:
