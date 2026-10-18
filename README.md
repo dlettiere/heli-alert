@@ -60,8 +60,10 @@ GOTIFY_APP_TOKEN=your_gotify_app_token_here
 # Proximity radius in miles
 MAX_DISTANCE_MI=5.0
 
-# Alert filters (comma-separated: helicopter, military_helo, plane, military_plane)
-ALERT_TYPES=helicopter,military_helo,military_plane
+# Alert filters (comma-separated: helicopter, military_helo, plane, military_plane, medflight)
+ALERT_TYPES=helicopter,military_helo,military_plane,medflight
+# Custom MedFlight tail numbers (comma-separated, optional)
+MEDFLIGHT_TAILS=N982LF,N136KY,N141NE,N143NE,N144NE,N145NE
 
 # Polling and cooldown (seconds)
 POLL_INTERVAL=10
@@ -122,7 +124,8 @@ services:
       - BASE_LAT=42.2797
       - BASE_LON=-71.8208
       - MAX_DISTANCE_MI=5.0
-      - ALERT_TYPES=helicopter,military_helo,military_plane
+      - ALERT_TYPES=helicopter,military_helo,military_plane,medflight
+      - MEDFLIGHT_TAILS=N982LF,N136KY,N141NE,N143NE,N144NE,N145NE
       - TRACKER_URL=https://www.flightradar24.com
       - GOTIFY_URL=http://your-gotify-host:8088
       - GOTIFY_APP_TOKEN=your_token_here
@@ -141,7 +144,8 @@ services:
 | `MAX_DISTANCE_MI` | `5.0` | Alert threshold radius in miles |
 | `GOTIFY_URL` | `http://localhost:8380` | URL of your Gotify server |
 | `GOTIFY_APP_TOKEN` | *(required)* | Gotify application API token |
-| `ALERT_TYPES` | `helicopter,military_helo,military_plane` | Comma-separated list: `helicopter`, `military_helo`, `plane`, `military_plane` |
+| `ALERT_TYPES` | `helicopter,military_helo,military_plane,medflight` | Comma-separated list: `helicopter`, `military_helo`, `plane`, `military_plane`, `medflight` |
+| `MEDFLIGHT_TAILS` | *(empty)* | Comma-separated tail numbers to alert as MedFlight (Air Methods, Life Flight, etc.) |
 | `POLL_INTERVAL` | `10` | Interval between polling cycles in seconds |
 | `ALERT_COOLDOWN` | `300` | Cooldown period before the same aircraft can trigger another alert |
 | `TRACKER_URL` | `https://www.flightradar24.com` | Base URL for notification click-through and map links |

@@ -426,6 +426,7 @@
       font-weight: 600;
     }
 
+    .badge-med { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
     .badge-helo { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
     .badge-mil { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
     .badge-plane { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
@@ -596,6 +597,14 @@
         <p class="help-text" style="margin-bottom: 12px;">Select which aircraft categories should trigger push notifications:</p>
         <div class="checkbox-grid">
           <label class="checkbox-card">
+            <input type="checkbox" name="alert_type" value="medflight">
+            <div class="checkbox-info">
+              <span class="checkbox-label">🚑🚁 MedFlight / Air Ambulance</span>
+              <span class="checkbox-sub">Air Methods, Life Flight, Boston MedFlight</span>
+            </div>
+          </label>
+
+          <label class="checkbox-card">
             <input type="checkbox" name="alert_type" value="helicopter">
             <div class="checkbox-info">
               <span class="checkbox-label">🚁 Helicopters</span>
@@ -626,6 +635,12 @@
               <span class="checkbox-sub">Commercial & general aviation fixed-wing</span>
             </div>
           </label>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label for="medflight_tails">Custom MedFlight Tail Numbers</label>
+          <input type="text" id="medflight_tails" name="medflight_tails" placeholder="e.g. N982LF, N136KY, N141NE, N143NE">
+          <span class="help-text">Comma-separated registrations to classify as MedFlight (Air Methods, Life Flight, etc.). Standard air medical operators and callsigns are also detected automatically.</span>
         </div>
       </div>
 
@@ -875,6 +890,12 @@
         cb.checked = alertTypes.has(cb.value);
       });
 
+      if (data.medflight_tails) {
+        document.getElementById("medflight_tails").value = Array.isArray(data.medflight_tails) ? data.medflight_tails.join(", ") : data.medflight_tails;
+      } else {
+        document.getElementById("medflight_tails").value = "";
+      }
+
       document.getElementById("stat-radius").textContent = (data.max_distance_mi || 5.0) + " mi";
     } catch (err) {
       showToast("Error loading settings: " + err.message, true);
@@ -888,6 +909,11 @@
       alertTypes.push(cb.value);
     });
 
+    const medflightTailsRaw = document.getElementById("medflight_tails").value;
+    const medflightTails = medflightTailsRaw.split(",")
+      .map(t => t.trim().toUpperCase().replace(/-/g, ""))
+      .filter(Boolean);
+
     const payload = {
       adsb_url: document.getElementById("adsb_url").value.trim(),
       base_lat: parseFloat(document.getElementById("base_lat").value),
@@ -898,7 +924,8 @@
       poll_interval: parseInt(document.getElementById("poll_interval").value, 10),
       alert_cooldown: parseInt(document.getElementById("alert_cooldown").value, 10),
       tracker_url: document.getElementById("tracker_url").value.trim(),
-      alert_types: alertTypes
+      alert_types: alertTypes,
+      medflight_tails: medflightTails
     };
 
     try {
@@ -1047,6 +1074,7 @@
   }
 
   function getBadgeClass(type) {
+    if (type.includes("med")) return "badge badge-med";
     if (type.includes("mil")) return "badge badge-mil";
     if (type.includes("helo") || type.includes("helicopter")) return "badge badge-helo";
     return "badge badge-plane";

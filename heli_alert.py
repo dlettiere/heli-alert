@@ -55,7 +55,8 @@ class Config:
     gotify_url: str = os.getenv("GOTIFY_URL", "http://localhost:8380")
     gotify_token: str = os.getenv("GOTIFY_APP_TOKEN", "")
     max_distance_mi: float = float(os.getenv("MAX_DISTANCE_MI", "5.0"))
-    alert_types: set = field(default_factory=lambda: {"helicopter", "military_helo", "military_plane"})
+    alert_types: set = field(default_factory=lambda: {"helicopter", "military_helo", "military_plane", "medflight"})
+    medflight_tails: set = field(default_factory=set)
     poll_interval: int = int(os.getenv("POLL_INTERVAL", "10"))
     alert_cooldown: int = int(os.getenv("ALERT_COOLDOWN", "300"))
     tracker_url: str = os.getenv("TRACKER_URL", "https://www.flightradar24.com")
@@ -66,6 +67,9 @@ class Config:
         raw = os.getenv("ALERT_TYPES", "")
         if raw:
             self.alert_types = {t.strip() for t in raw.split(",") if t.strip()}
+        raw_tails = os.getenv("MEDFLIGHT_TAILS", "")
+        if raw_tails:
+            self.medflight_tails = {t.strip().upper().replace("-", "") for t in raw_tails.split(",") if t.strip()}
 
     @property
     def tar1090_base_url(self) -> str:
@@ -95,6 +99,12 @@ def load_config() -> Config:
                         c.alert_types = {t.strip() for t in types.split(",") if t.strip()}
                     elif isinstance(types, (list, set)):
                         c.alert_types = {str(t).strip() for t in types if str(t).strip()}
+                if "medflight_tails" in saved:
+                    tails = saved["medflight_tails"]
+                    if isinstance(tails, str):
+                        c.medflight_tails = {t.strip().upper().replace("-", "") for t in tails.split(",") if t.strip()}
+                    elif isinstance(tails, (list, set)):
+                        c.medflight_tails = {str(t).strip().upper().replace("-", "") for t in tails if str(t).strip()}
                 if "poll_interval" in saved: c.poll_interval = max(2, int(saved["poll_interval"]))
                 if "alert_cooldown" in saved: c.alert_cooldown = max(10, int(saved["alert_cooldown"]))
                 if "tracker_url" in saved: c.tracker_url = str(saved["tracker_url"]).strip()
@@ -144,6 +154,12 @@ def save_config_data(new_settings: dict) -> tuple[bool, str]:
                     cfg.alert_types = {t.strip() for t in types.split(",") if t.strip()}
                 elif isinstance(types, (list, set)):
                     cfg.alert_types = {str(t).strip() for t in types if str(t).strip()}
+            if "medflight_tails" in new_settings:
+                tails = new_settings["medflight_tails"]
+                if isinstance(tails, str):
+                    cfg.medflight_tails = {t.strip().upper().replace("-", "") for t in tails.split(",") if t.strip()}
+                elif isinstance(tails, (list, set)):
+                    cfg.medflight_tails = {str(t).strip().upper().replace("-", "") for t in tails if str(t).strip()}
             if "poll_interval" in new_settings:
                 cfg.poll_interval = max(2, int(new_settings["poll_interval"]))
             if "alert_cooldown" in new_settings:
@@ -159,6 +175,7 @@ def save_config_data(new_settings: dict) -> tuple[bool, str]:
                 "gotify_token": cfg.gotify_token,
                 "max_distance_mi": cfg.max_distance_mi,
                 "alert_types": sorted(list(cfg.alert_types)),
+                "medflight_tails": sorted(list(cfg.medflight_tails)),
                 "poll_interval": cfg.poll_interval,
                 "alert_cooldown": cfg.alert_cooldown,
                 "tracker_url": cfg.tracker_url,
@@ -238,17 +255,63 @@ HELO_DESC_KEYWORDS = [
     "agusta", "leonardo",
 ]
 
+MEDFLIGHT_CALLSIGN_PREFIXES = (
+    "MEDFLT", "LIFEFLT", "LF1", "LF2", "AIRM", "LIFENET", "MEDEVAC", "ANGEL", "MDFLT", "HEMS"
+)
 
-def classify_aircraft(ac: dict) -> str:
+MEDFLIGHT_OPERATOR_KEYWORDS = (
+    "air methods", "airmethods", "boston medflight", "life flight", "lifeflight",
+    "new england life flight", "stat medevac", "air ambulance", "critical care",
+    "med-trans", "metro aviation", "phi air medical", "mercy flight", "airlife",
+    "umass memorial life flight", "careflite", "flight for life", "classic air medical"
+)
+
+
+def classify_aircraft(ac: dict, meta: Optional[dict] = None) -> str:
     """
     Classify an aircraft dict into one of:
-        helicopter, military_helo, plane, military_plane, unknown
+        medflight, helicopter, military_helo, plane, military_plane, unknown
     """
     category = (ac.get("category") or "").upper()
     icao_type = (ac.get("t") or "").upper()
     desc = (ac.get("desc") or "").lower()
     db_flags = ac.get("dbFlags", 0) or 0
     is_military = bool(db_flags & 1)
+
+    reg = (ac.get("r") or "").upper().replace("-", "").strip()
+    flight = (ac.get("flight") or "").upper().strip()
+
+    meta_reg = ""
+    owner = ""
+    if meta:
+        meta_reg = (meta.get("registration") or "").upper().replace("-", "").strip()
+        owner = (meta.get("owner") or "").lower()
+
+    # Check for MedFlight / Air Ambulance
+    is_medflight = False
+
+    # 1. Match against user-configured MedFlight tail numbers
+    tail_candidates = {t for t in (reg, meta_reg) if t}
+    if cfg.medflight_tails and tail_candidates.intersection(cfg.medflight_tails):
+        is_medflight = True
+
+    # 2. Match standard medical transport callsigns
+    if not is_medflight and flight:
+        for pfx in MEDFLIGHT_CALLSIGN_PREFIXES:
+            if flight.startswith(pfx):
+                is_medflight = True
+                break
+
+    # 3. Match air medical operator / owner keywords
+    if not is_medflight and (owner or desc):
+        combined_text = f"{owner} {desc}"
+        for kw in MEDFLIGHT_OPERATOR_KEYWORDS:
+            if kw in combined_text:
+                is_medflight = True
+                break
+
+    if is_medflight:
+        return "medflight"
 
     is_helo = False
 
@@ -468,6 +531,7 @@ def get_route_info(callsign: str) -> dict:
 # ─── Gotify notification ───────────────────────────────────────────
 
 TYPE_EMOJI = {
+    "medflight": "🚑🚁",
     "helicopter": "🚁",
     "military_helo": "🪖🚁",
     "plane": "✈️",
@@ -475,6 +539,7 @@ TYPE_EMOJI = {
 }
 
 PRIORITY_MAP = {
+    "medflight": 8,
     "helicopter": 5,
     "military_helo": 8,
     "plane": 3,
@@ -578,7 +643,10 @@ def format_alert(ac: dict, ac_type: str, distance: float, meta: dict, route: dic
     squawk = ac.get("squawk", "")
 
     # Build concise, descriptive title
-    type_label = ac_type.replace("_", " ").title()
+    if ac_type == "medflight":
+        type_label = "MedFlight"
+    else:
+        type_label = ac_type.replace("_", " ").title()
     if manufacturer and full_type:
         if manufacturer.lower() in full_type.lower():
             title_desc = full_type
@@ -677,19 +745,23 @@ def poll_once() -> int:
         if distance > cfg.max_distance_mi:
             continue
 
-        ac_type = classify_aircraft(ac)
         hex_code = ac.get("hex", "unknown").lower()
         flight = (ac.get("flight") or "").strip()
         reg = ac.get("r", "")
 
-        primary_url, _ = build_tracker_url(ac, hex_code, reg)
+        # Enrich metadata for accurate classification & display
+        meta = get_aircraft_meta(hex_code)
+        ac_type = classify_aircraft(ac, meta=meta)
+        display_reg = reg or meta.get("registration", "")
+
+        primary_url, _ = build_tracker_url(ac, hex_code, display_reg)
 
         current_in_radius.append({
             "hex": hex_code,
             "type": ac_type,
             "flight": flight,
-            "registration": reg,
-            "model": ac.get("t", ""),
+            "registration": display_reg,
+            "model": ac.get("t", "") or meta.get("type_name", ""),
             "desc": ac.get("desc", ""),
             "distance": round(distance, 2),
             "altitude": ac.get("alt_baro"),
@@ -708,8 +780,7 @@ def poll_once() -> int:
         if (now - last_alert) < cfg.alert_cooldown:
             continue
 
-        # Enrich metadata & route
-        meta = get_aircraft_meta(hex_code)
+        # Enrich route
         route = get_route_info(flight)
 
         title, body, tracker_link = format_alert(ac, ac_type, distance, meta, route)
@@ -808,6 +879,7 @@ class WebHandler(http.server.BaseHTTPRequestHandler):
                     "gotify_token": cfg.gotify_token,
                     "max_distance_mi": cfg.max_distance_mi,
                     "alert_types": sorted(list(cfg.alert_types)),
+                    "medflight_tails": sorted(list(cfg.medflight_tails)),
                     "poll_interval": cfg.poll_interval,
                     "alert_cooldown": cfg.alert_cooldown,
                     "tracker_url": cfg.tracker_url,
@@ -960,6 +1032,8 @@ def main():
     log.info("  Gotify:        %s", cfg.gotify_url)
     log.info("  Alert radius:  %.1f mi", cfg.max_distance_mi)
     log.info("  Alert types:   %s", ", ".join(sorted(cfg.alert_types)))
+    if cfg.medflight_tails:
+        log.info("  MedFlight tails: %s", ", ".join(sorted(cfg.medflight_tails)))
     log.info("  Tracker URL:   %s", cfg.tracker_url)
     log.info("  Poll interval: %d s", cfg.poll_interval)
     log.info("  Cooldown:      %d s", cfg.alert_cooldown)
