@@ -54,6 +54,9 @@ class Config:
     base_lon: float = float(os.getenv("BASE_LON", "0"))
     gotify_url: str = os.getenv("GOTIFY_URL", "http://localhost:8380")
     gotify_token: str = os.getenv("GOTIFY_APP_TOKEN", "")
+    ntfy_url: str = os.getenv("NTFY_URL", "https://ntfy.lettiere.org")
+    ntfy_topic: str = os.getenv("NTFY_TOPIC", "heli-alert")
+    ntfy_token: str = os.getenv("NTFY_TOKEN", "")
     max_distance_mi: float = float(os.getenv("MAX_DISTANCE_MI", "5.0"))
     alert_types: set = field(default_factory=lambda: {"helicopter", "military_helo", "military_plane", "medflight"})
     medflight_tails: set = field(default_factory=set)
@@ -92,6 +95,12 @@ def load_config() -> Config:
                 if "base_lon" in saved: c.base_lon = float(saved["base_lon"])
                 if "gotify_url" in saved: c.gotify_url = str(saved["gotify_url"]).strip()
                 if "gotify_token" in saved: c.gotify_token = str(saved["gotify_token"]).strip()
+                if "ntfy_url" in saved and str(saved["ntfy_url"]).strip():
+                    c.ntfy_url = str(saved["ntfy_url"]).strip()
+                if "ntfy_topic" in saved and str(saved["ntfy_topic"]).strip():
+                    c.ntfy_topic = str(saved["ntfy_topic"]).strip()
+                if "ntfy_token" in saved and str(saved["ntfy_token"]).strip():
+                    c.ntfy_token = str(saved["ntfy_token"]).strip()
                 if "max_distance_mi" in saved: c.max_distance_mi = float(saved["max_distance_mi"])
                 if "alert_types" in saved:
                     types = saved["alert_types"]
@@ -146,6 +155,15 @@ def save_config_data(new_settings: dict) -> tuple[bool, str]:
                 cfg.gotify_url = val
             if "gotify_token" in new_settings:
                 cfg.gotify_token = str(new_settings["gotify_token"]).strip()
+            if "ntfy_url" in new_settings:
+                val = str(new_settings["ntfy_url"]).strip().rstrip("/")
+                if val and not (val.startswith("http://") or val.startswith("https://")):
+                    return False, "ntfy URL must start with http:// or https://"
+                cfg.ntfy_url = val
+            if "ntfy_topic" in new_settings:
+                cfg.ntfy_topic = str(new_settings["ntfy_topic"]).strip().lstrip("/")
+            if "ntfy_token" in new_settings:
+                cfg.ntfy_token = str(new_settings["ntfy_token"]).strip()
             if "max_distance_mi" in new_settings:
                 cfg.max_distance_mi = max(0.1, float(new_settings["max_distance_mi"]))
             if "alert_types" in new_settings:
@@ -173,6 +191,9 @@ def save_config_data(new_settings: dict) -> tuple[bool, str]:
                 "base_lon": cfg.base_lon,
                 "gotify_url": cfg.gotify_url,
                 "gotify_token": cfg.gotify_token,
+                "ntfy_url": cfg.ntfy_url,
+                "ntfy_topic": cfg.ntfy_topic,
+                "ntfy_token": cfg.ntfy_token,
                 "max_distance_mi": cfg.max_distance_mi,
                 "alert_types": sorted(list(cfg.alert_types)),
                 "medflight_tails": sorted(list(cfg.medflight_tails)),
@@ -585,6 +606,84 @@ def send_gotify(title: str, message: str, priority: int = 5, click_url: Optional
         return False, str(exc)
 
 
+NTFY_PRIORITY_MAP = {
+    "medflight": 5,
+    "military_helo": 4,
+    "military_plane": 4,
+    "helicopter": 3,
+    "plane": 3,
+}
+
+
+def send_ntfy(title: str, message: str, ac_type: str = "helicopter", click_url: Optional[str] = None,
+              override_url: Optional[str] = None, override_topic: Optional[str] = None,
+              override_token: Optional[str] = None) -> tuple[bool, str]:
+    """Push a notification to ntfy with Markdown rendering and click action."""
+    base_ntfy = (override_url or cfg.ntfy_url).strip().rstrip("/")
+    topic = (override_topic or cfg.ntfy_topic).strip().lstrip("/")
+    token = (override_token or cfg.ntfy_token).strip()
+
+    if not base_ntfy or not topic:
+        return False, "ntfy URL or Topic not configured"
+
+    ntfy_prio = NTFY_PRIORITY_MAP.get(ac_type, 3)
+    target_url = click_url or cfg.tracker_url
+
+    payload = {
+        "topic": topic,
+        "title": title,
+        "message": message,
+        "priority": ntfy_prio,
+        "markdown": True,
+    }
+    if target_url:
+        payload["click"] = target_url
+        payload["actions"] = [
+            {
+                "action": "view",
+                "label": "🛰️ Open Live Radar",
+                "url": target_url,
+            }
+        ]
+
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        resp = requests.post(
+            base_ntfy,
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        log.info("ntfy notification sent (%s/%s): %s", base_ntfy, topic, title)
+        return True, "ntfy notification sent successfully"
+    except requests.RequestException as exc:
+        log.error("ntfy push failed: %s", exc)
+        return False, str(exc)
+
+
+def send_notifications(title: str, message: str, ac_type: str, priority: int = 5,
+                       click_url: Optional[str] = None) -> tuple[bool, str]:
+    """Send alert to both Gotify and ntfy if configured."""
+    results = []
+    any_ok = False
+
+    if cfg.gotify_url and cfg.gotify_token:
+        g_ok, g_msg = send_gotify(title, message, priority=priority, click_url=click_url)
+        any_ok = any_ok or g_ok
+        results.append(f"Gotify: {g_msg}")
+
+    if cfg.ntfy_url and cfg.ntfy_topic:
+        n_ok, n_msg = send_ntfy(title, message, ac_type=ac_type, click_url=click_url)
+        any_ok = any_ok or n_ok
+        results.append(f"ntfy: {n_msg}")
+
+    return any_ok, " | ".join(results) if results else "No notification service configured"
+
+
 # ─── Formatting ─────────────────────────────────────────────────────
 
 def build_tracker_url(ac: dict, hex_code: str, registration: str, tracker_base: Optional[str] = None) -> tuple[str, list[tuple[str, str]]]:
@@ -786,7 +885,7 @@ def poll_once() -> int:
         title, body, tracker_link = format_alert(ac, ac_type, distance, meta, route)
         priority = PRIORITY_MAP.get(ac_type, 5)
 
-        success, msg = send_gotify(title, body, priority, click_url=tracker_link)
+        success, msg = send_notifications(title, body, ac_type, priority, click_url=tracker_link)
         if success:
             _alerted[hex_code] = now
             alerts_sent += 1
@@ -877,6 +976,9 @@ class WebHandler(http.server.BaseHTTPRequestHandler):
                     "base_lon": cfg.base_lon,
                     "gotify_url": cfg.gotify_url,
                     "gotify_token": cfg.gotify_token,
+                    "ntfy_url": cfg.ntfy_url,
+                    "ntfy_topic": cfg.ntfy_topic,
+                    "ntfy_token": cfg.ntfy_token,
                     "max_distance_mi": cfg.max_distance_mi,
                     "alert_types": sorted(list(cfg.alert_types)),
                     "medflight_tails": sorted(list(cfg.medflight_tails)),
@@ -896,8 +998,9 @@ class WebHandler(http.server.BaseHTTPRequestHandler):
                     "total_polls": _total_polls,
                     "total_alerts_sent": _total_alerts,
                     "adsb_connected": _adsb_connected,
-                    "gotify_reachable": bool(cfg.gotify_token),
+                    "gotify_reachable": bool(cfg.gotify_token or cfg.ntfy_topic),
                     "gotify_configured": bool(cfg.gotify_token),
+                    "ntfy_configured": bool(cfg.ntfy_url and cfg.ntfy_topic),
                     "poll_interval": cfg.poll_interval,
                     "alert_cooldown": cfg.alert_cooldown,
                     "last_poll_time": _last_poll_time,
@@ -944,9 +1047,12 @@ class WebHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(200, {"success": False, "error": str(exc)})
             return
 
-        if path == "/api/test-gotify":
+        if path in ("/api/test-gotify", "/api/test-ntfy"):
             test_url = payload.get("gotify_url") or cfg.gotify_url
             test_token = payload.get("gotify_token") or cfg.gotify_token
+            ntfy_url = payload.get("ntfy_url") or cfg.ntfy_url
+            ntfy_topic = payload.get("ntfy_topic") or cfg.ntfy_topic
+            ntfy_token = payload.get("ntfy_token") or cfg.ntfy_token
             tracker = payload.get("tracker_url") or cfg.tracker_url
             lat = payload.get("base_lat") or cfg.base_lat
             lon = payload.get("base_lon") or cfg.base_lon
@@ -983,10 +1089,22 @@ class WebHandler(http.server.BaseHTTPRequestHandler):
                     lines.append(f"[{lbl}]({u})")
 
             body = "\n".join(lines)
-            success, msg = send_gotify(title, body, priority=5, click_url=primary_url,
-                                       override_url=test_url, override_token=test_token)
+            if path == "/api/test-ntfy":
+                success, msg = send_ntfy(title, body, ac_type="helicopter", click_url=primary_url,
+                                         override_url=ntfy_url, override_topic=ntfy_topic, override_token=ntfy_token)
+            else:
+                g_ok, g_msg = send_gotify(title, body, priority=5, click_url=primary_url,
+                                          override_url=test_url, override_token=test_token)
+                if ntfy_url and ntfy_topic:
+                    n_ok, n_msg = send_ntfy(title, body, ac_type="helicopter", click_url=primary_url,
+                                            override_url=ntfy_url, override_topic=ntfy_topic, override_token=ntfy_token)
+                    success = g_ok and n_ok
+                    msg = f"Gotify: {g_msg} | ntfy: {n_msg}"
+                else:
+                    success, msg = g_ok, g_msg
+
             if success:
-                self._send_json(200, {"success": True, "message": "Notification sent successfully"})
+                self._send_json(200, {"success": True, "message": msg})
             else:
                 self._send_json(200, {"success": False, "error": msg})
             return
@@ -1005,8 +1123,8 @@ def poller_worker():
     while not _stop_event.is_set():
         if cfg.base_lat == 0 and cfg.base_lon == 0:
             log.debug("Waiting for base coordinates to be configured...")
-        elif not cfg.gotify_token:
-            log.debug("Waiting for Gotify token to be configured...")
+        elif not cfg.gotify_token and not (cfg.ntfy_url and cfg.ntfy_topic):
+            log.debug("Waiting for Gotify or ntfy to be configured...")
         else:
             try:
                 poll_once()
@@ -1030,6 +1148,8 @@ def main():
     log.info("  ADS-B source:  %s", cfg.adsb_url)
     log.info("  Base station:  %.4f, %.4f", cfg.base_lat, cfg.base_lon)
     log.info("  Gotify:        %s", cfg.gotify_url)
+    if cfg.ntfy_url and cfg.ntfy_topic:
+        log.info("  ntfy:          %s/%s", cfg.ntfy_url, cfg.ntfy_topic)
     log.info("  Alert radius:  %.1f mi", cfg.max_distance_mi)
     log.info("  Alert types:   %s", ", ".join(sorted(cfg.alert_types)))
     if cfg.medflight_tails:

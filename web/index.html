@@ -693,30 +693,52 @@
         </div>
       </div>
 
-      <!-- Gotify Settings -->
+      <!-- Gotify & ntfy Settings -->
       <div class="card">
         <div class="card-title">
-          <span class="card-title-icon">🔔</span> Gotify Push Server
+          <span class="card-title-icon">🔔</span> Push Notification Servers (Gotify &amp; ntfy)
         </div>
         <div class="form-grid">
           <div class="form-group">
             <label for="gotify_url">Gotify Server URL</label>
-            <input type="text" id="gotify_url" name="gotify_url" placeholder="http://192.168.1.20:8088" required>
+            <input type="text" id="gotify_url" name="gotify_url" placeholder="https://gotify.lettiere.org">
             <span class="help-text">Base URL of your Gotify server.</span>
           </div>
 
           <div class="form-group">
             <label for="gotify_token">Gotify App Token</label>
             <div class="input-action-group">
-              <input type="password" id="gotify_token" name="gotify_token" placeholder="gtfya..." required>
-              <button type="button" class="btn" onclick="toggleTokenVisibility()">👁️</button>
+              <input type="password" id="gotify_token" name="gotify_token" placeholder="gtfya...">
+              <button type="button" class="btn" onclick="toggleTokenVisibility('gotify_token')">👁️</button>
             </div>
             <span class="help-text">Token from Gotify application for heli-alert.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="ntfy_url">ntfy Server URL</label>
+            <input type="text" id="ntfy_url" name="ntfy_url" placeholder="https://ntfy.lettiere.org">
+            <span class="help-text">Base URL of your ntfy server.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="ntfy_topic">ntfy Topic</label>
+            <input type="text" id="ntfy_topic" name="ntfy_topic" placeholder="heli-alert">
+            <span class="help-text">Topic name to publish alerts to (e.g. heli-alert).</span>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label for="ntfy_token">ntfy Access Token</label>
+            <div class="input-action-group">
+              <input type="password" id="ntfy_token" name="ntfy_token" placeholder="tk_...">
+              <button type="button" class="btn" onclick="toggleTokenVisibility('ntfy_token')">👁️</button>
+            </div>
+            <span class="help-text">Bearer access token (`tk_...`) for authenticated ntfy publishing.</span>
           </div>
         </div>
 
         <div class="form-actions" style="margin-top: 16px; border-top: none; padding-top: 0;">
-          <button type="button" class="btn btn-outline" onclick="testGotify()">🔔 Send Test Notification</button>
+          <button type="button" class="btn btn-outline" onclick="testGotify()">🔔 Test Both (Gotify + ntfy)</button>
+          <button type="button" class="btn btn-outline" onclick="testNtfy()">📲 Test ntfy Only</button>
         </div>
       </div>
 
@@ -833,9 +855,9 @@
     }
   }
 
-  function toggleTokenVisibility() {
-    const input = document.getElementById("gotify_token");
-    input.type = input.type === "password" ? "text" : "password";
+  function toggleTokenVisibility(id = "gotify_token") {
+    const input = document.getElementById(id);
+    if (input) input.type = input.type === "password" ? "text" : "password";
   }
 
   function updateTrackerSelection() {
@@ -879,6 +901,9 @@
       document.getElementById("max_distance_mi").value = data.max_distance_mi ?? 5.0;
       document.getElementById("gotify_url").value = data.gotify_url || "";
       document.getElementById("gotify_token").value = data.gotify_token || "";
+      document.getElementById("ntfy_url").value = data.ntfy_url || "";
+      document.getElementById("ntfy_topic").value = data.ntfy_topic || "";
+      document.getElementById("ntfy_token").value = data.ntfy_token || "";
       document.getElementById("poll_interval").value = data.poll_interval ?? 10;
       document.getElementById("alert_cooldown").value = data.alert_cooldown ?? 300;
       document.getElementById("tracker_url").value = data.tracker_url || "https://www.flightradar24.com";
@@ -921,6 +946,9 @@
       max_distance_mi: parseFloat(document.getElementById("max_distance_mi").value),
       gotify_url: document.getElementById("gotify_url").value.trim(),
       gotify_token: document.getElementById("gotify_token").value.trim(),
+      ntfy_url: document.getElementById("ntfy_url").value.trim(),
+      ntfy_topic: document.getElementById("ntfy_topic").value.trim(),
+      ntfy_token: document.getElementById("ntfy_token").value.trim(),
       poll_interval: parseInt(document.getElementById("poll_interval").value, 10),
       alert_cooldown: parseInt(document.getElementById("alert_cooldown").value, 10),
       tracker_url: document.getElementById("tracker_url").value.trim(),
@@ -970,18 +998,24 @@
   async function testGotify() {
     const url = document.getElementById("gotify_url").value.trim();
     const token = document.getElementById("gotify_token").value.trim();
+    const ntfy_url = document.getElementById("ntfy_url").value.trim();
+    const ntfy_topic = document.getElementById("ntfy_topic").value.trim();
+    const ntfy_token = document.getElementById("ntfy_token").value.trim();
     const tracker = document.getElementById("tracker_url").value.trim();
     const lat = parseFloat(document.getElementById("base_lat").value) || 0;
     const lon = parseFloat(document.getElementById("base_lon").value) || 0;
 
     try {
-      showToast("Sending test notification to Gotify...");
+      showToast("Sending test notification...");
       const res = await fetch("/api/test-gotify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           gotify_url: url,
           gotify_token: token,
+          ntfy_url: ntfy_url,
+          ntfy_topic: ntfy_topic,
+          ntfy_token: ntfy_token,
           tracker_url: tracker,
           base_lat: lat,
           base_lon: lon
@@ -989,12 +1023,45 @@
       });
       const data = await res.json();
       if (data.success) {
-        showToast("✓ Test notification sent! Check your Gotify app.");
+        showToast("✓ Test notification sent! (" + (data.message || "OK") + ")");
       } else {
-        showToast("Gotify error: " + (data.error || "Failed to send"), true);
+        showToast("Push error: " + (data.error || "Failed to send"), true);
       }
     } catch (err) {
-      showToast("Gotify test error: " + err.message, true);
+      showToast("Test error: " + err.message, true);
+    }
+  }
+
+  async function testNtfy() {
+    const ntfy_url = document.getElementById("ntfy_url").value.trim();
+    const ntfy_topic = document.getElementById("ntfy_topic").value.trim();
+    const ntfy_token = document.getElementById("ntfy_token").value.trim();
+    const tracker = document.getElementById("tracker_url").value.trim();
+    const lat = parseFloat(document.getElementById("base_lat").value) || 0;
+    const lon = parseFloat(document.getElementById("base_lon").value) || 0;
+
+    try {
+      showToast("Sending test notification to ntfy...");
+      const res = await fetch("/api/test-ntfy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ntfy_url: ntfy_url,
+          ntfy_topic: ntfy_topic,
+          ntfy_token: ntfy_token,
+          tracker_url: tracker,
+          base_lat: lat,
+          base_lon: lon
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✓ Test notification sent to ntfy!");
+      } else {
+        showToast("ntfy error: " + (data.error || "Failed to send"), true);
+      }
+    } catch (err) {
+      showToast("ntfy test error: " + err.message, true);
     }
   }
 
@@ -1045,15 +1112,18 @@
 
       const gotifyDot = document.getElementById("gotify-dot");
       const gotifyText = document.getElementById("gotify-text");
-      if (data.gotify_reachable) {
+      if (data.gotify_configured && data.ntfy_configured) {
+        gotifyDot.className = "dot green";
+        gotifyText.textContent = "Push: Gotify + ntfy";
+      } else if (data.gotify_configured) {
         gotifyDot.className = "dot green";
         gotifyText.textContent = "Gotify: Ready";
-      } else if (!data.gotify_configured) {
-        gotifyDot.className = "dot yellow";
-        gotifyText.textContent = "Gotify: No Token";
+      } else if (data.ntfy_configured) {
+        gotifyDot.className = "dot green";
+        gotifyText.textContent = "ntfy: Ready";
       } else {
-        gotifyDot.className = "dot red";
-        gotifyText.textContent = "Gotify: Error";
+        gotifyDot.className = "dot yellow";
+        gotifyText.textContent = "Push: Unconfigured";
       }
 
       // Update stats
